@@ -118,4 +118,29 @@ let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
   }).end(buffer);
 }
 
+router.get('/update', (req, res) => {
+  User.find({}, (err, users) => {
+    if(err)
+      return res.status(200).json({
+        status: true,
+        message: 'Here is your query result',
+        data: users
+      })
+    let erroneus = [];
+    users.forEach(async (user) => {
+      user.submission = ["","","",""];
+      try {
+        await user.save();
+      } catch (err) {
+        erroneus.push(user.username);
+      }
+    })
+    return res.status(200).json({
+      status: true,
+      message: 'Here is your query result',
+      data: erroneus
+    })
+  })
+})
+
 module.exports = router;

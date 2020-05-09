@@ -42,6 +42,10 @@ module.exports = mongoose.model('User',new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    "submissions": {
+        type: [],
+        default: ["","","",""]
+    },
     "admin": {
         type: Boolean,
         default: false
