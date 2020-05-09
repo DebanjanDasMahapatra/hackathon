@@ -121,10 +121,10 @@ let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
 router.get('/update', (req, res) => {
   User.find({}, (err, users) => {
     if(err)
-      return res.status(200).json({
-        status: true,
-        message: 'Here is your query result',
-        data: users
+      return res.status(500).json({
+        status: false,
+        message: '[Failed] Here is your query result',
+        data: err
       })
     let erroneus = [];
     users.forEach(async (user) => {
@@ -132,12 +132,12 @@ router.get('/update', (req, res) => {
       try {
         await user.save();
       } catch (err) {
-        erroneus.push(user.username);
+        erroneus.push({ username: user.username, error: err });
       }
     })
     return res.status(200).json({
       status: true,
-      message: 'Here is your query result',
+      message: '[Success] Here is your query result',
       data: erroneus
     })
   })
