@@ -7,7 +7,7 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
-mongoose.connect(process.env.DBURL,{ useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: true }).then(data => {
+mongoose.connect(process.env.DBURL,{ useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false, useCreateIndex: true }).then(data => {
   console.log("Connected to the DB");
 }).catch(err => {
   console.log("Error connecting to the DB");
