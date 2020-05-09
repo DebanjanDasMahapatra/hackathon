@@ -4,7 +4,7 @@ const uploadFile = multer({ storage: multer.memoryStorage() });
 
 const User = require('../models/user');
 const Auth = require("../middlewares/auth");
-const AWS = require("../helpers/aws");
+const GCS = require("../helpers/gcs");
 
 router.get("/fetchUsers",  (req, res) => {
   User.find({}, (err, users) => {
@@ -31,21 +31,19 @@ router.get("/deleteUser/:username", Auth.authenticateAdmin, (req, res) => {
         error: err
       });
     if(deletedUser) {
-      const params = {
-        Bucket: process.env.AB,
-        Key: deletedUser._id + '.zip'
-      }
-      AWS.deleteObject(params, (err, data) => {
-        if (err)
-          return res.status(500).json({
-            status: false,
-            message: 'Cannot Delete User Submission, User Entry Deleted in DB.',
-            error: err
-          });
+      let deletUser = async() => {
+        await GCS.file(req.params.username+'/').delete();
         return res.status(200).json({
           status: true,
           message: "Deleted successfully",
           user: deletedUser
+        });
+      }
+      deletUser().catch(err => {
+        return res.status(500).json({
+          status: false,
+          message: 'Cannot Delete User Files',
+          error: err
         });
       });
     }
@@ -76,40 +74,24 @@ router.post('/setSettings', Auth.authenticateAdmin, uploadFile.single('file'), (
 
 let updateSettings = (rawData, res, fromBanner = undefined) => {
   let fileData = JSON.stringify(rawData);
-  const params = {
-    Bucket: process.env.AB,
-    Key: 'settings.txt',
-    Body: new Buffer(fileData,'utf-8')
-  };
-  AWS.upload(params, (s3Err, data) => {
-    if (s3Err)
-      return res.status(500).json({
-        status: false,
-        message: 'Settings Update Error'+(fromBanner ? ', Banner Updated Successfully' : ''),
-        error: s3Err
-      });
-    console.log(`Settings uploaded Successfully at ${data.Location}`);
+  const bs = GCS.file('settings.txt').createWriteStream({ resumable: false });
+  bs.on('finish', () => {
     return res.status(200).json({
       status: true,
       message: 'Settings'+(fromBanner ? ' and Banner' : '')+' Updated Successfully'
     });
-  });
+  }).on('error', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Settings Update Error'+(fromBanner ? ', Banner Updated Successfully' : ''),
+      error: err
+    });
+  }).end(new Buffer(fileData,'utf-8'));
 }
 
 let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
-  const params = {
-    Bucket: process.env.AB,
-    Key: fileName,
-    Body: buffer
-  };
-  AWS.upload(params, (s3Err, data) => {
-    if (s3Err)
-      return res.status(500).json({
-        status: false,
-        message: 'Banner Update Error',
-        error: s3Err
-      });
-    console.log(`Banner uploaded Successfully at ${data.Location}`);
+  const bs = GCS.file(fileName).createWriteStream({ resumable: false });
+  bs.on('finish', () => {
     if(settingsData) {
       settingsData.banner = fileName;
       updateSettings(settingsData, res, true);
@@ -119,7 +101,13 @@ let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
         status: true,
         message: 'Banner Updated Successfully'
       });
-  });
+  }).on('error', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Settings Update Error'+(fromBanner ? ', Banner Updated Successfully' : ''),
+      error: err
+    });
+  }).end(buffer);
 }
 
 module.exports = router;

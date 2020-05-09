@@ -1,7 +1,5 @@
 const router = require("express").Router();
 const multer = require('multer');
-const uploadFile = multer({ storage: multer.memoryStorage() });
-const AWS = require('../helpers/aws');
 const GCS = require('../helpers/gcs');
 
 router.get('/download/:uname', (req, res) => {
@@ -15,34 +13,30 @@ router.get('/view/:uname/:name', (req, res) => {
 });
 
 router.get('/getSettings', (req, res) => {
-  const params = {
-    Bucket: process.env.AB,
-    Key: 'settings.txt'
-  };
-  AWS.getObject(params, (s3Err, data) => {
-    if (s3Err)
-      return res.status(500).json({
-        status: false,
-        message: 'Settings Retrieve Error',
-        error: s3Err
-      });
-    let jsonData = JSON.parse(data.Body.toString());
+  let loadData = GCS.file('settings.txt').createReadStream();
+  let text = '';
+  loadData.on('data', (data) => {
+    text += data;
+  }).on('end', () => {
+    let jsonData = JSON.parse(text);
     return res.status(200).json({
       status: true,
       message: 'Settings Retrieved Successfully',
       data: jsonData,
       serverDate: new Date()
     });
-  });
+  }).on('error',(err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Settings Retrieve Error',
+      error: err
+    });
+  }); 
 });
 
 router.get('/getBanner/:bn', (req, res) => {
-  const params = {
-    Bucket: process.env.AB,
-    Key: req.params.bn
-  }
   res.attachment(req.params.bn);
-  AWS.getObject(params).createReadStream().pipe(res);
+  GCS.file('banner.jpg').createReadStream().pipe(res);
 });
 
 module.exports = router;
