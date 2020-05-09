@@ -32,7 +32,15 @@ router.get("/deleteUser/:username", Auth.authenticateAdmin, (req, res) => {
       });
     if(deletedUser) {
       let deletUser = async() => {
-        await GCS.file(req.params.username+'/').delete();
+        const [files] = await GCS.getFiles({ prefix: req.params.username+'/' });
+        let error = false;
+        files.forEach(async (file) => {
+          try {
+            await file.delete();
+          } catch(err) {
+            error = true;
+          }
+        })
         return res.status(200).json({
           status: true,
           message: "Deleted successfully",
