@@ -24,32 +24,53 @@ router.get("/fetchUserNamesEmails", (req, res) => {
   });
 });
 
-router.post("/register", (req, res) => {
-  var userData = req.body;
-  userData.password = sha1(req.body.password);
-  new User(req.body)
-    .save()
-    .then(newUser => {
-      if (newUser)
-        return res.status(200).json({
-          status: true,
-          message: "Registration Successful :)",
-          user: newUser
+router.post("/register", uploadFile.array('files[]',2), (req, res) => {
+  const bs = GCS.file(req.body.username + '/photo.jpg').createWriteStream({ resumable: false });
+  bs.on('finish', () => {
+    console.log(`https://storage.googleapis.com/${GCS.name}`);
+    const bs = GCS.file(req.body.username + '/idcard.jpg').createWriteStream({ resumable: false });
+    bs.on('finish', () => {
+      console.log(`https://storage.googleapis.com/${GCS.name}`);
+      var userData = req.body;
+      console.log(userData);
+      userData.password = sha1(req.body.password);
+      new User(userData)
+        .save()
+        .then(newUser => {
+          if (newUser)
+            return res.status(200).json({
+              status: true,
+              message: "Registration Successful :)",
+              user: newUser
+            });
+          else
+            return res.status(500).json({
+              status: false,
+              message: "Registration Failed! Try again..",
+              error: "Unknown"
+            });
+        })
+        .catch(err => {
+          return res.status(500).json({
+            status: false,
+            message: "Registration Failed! Server Error..",
+            error: err
+          });
         });
-      else
-        return res.status(500).json({
-          status: false,
-          message: "Registration Failed! Try again..",
-          error: "Unknown"
-        });
-    })
-    .catch(err => {
+    }).on('error', (err) => {
       return res.status(500).json({
         status: false,
-        message: "Registration Failed! Server Error..",
+        message: 'ID Card Upload Error',
         error: err
       });
+    }).end(req.files[1].buffer);
+  }).on('error', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Photo Upload Error',
+      error: err
     });
+  }).end(req.files[0].buffer);
 });
 
 router.post("/login", (req, res) => {
@@ -100,12 +121,12 @@ router.post('/submit/:action', Auth.authenticateAll, uploadFile.single('file'), 
       message: "Only .zip file is allowed for Submission"
     });
     if(req.params.action === 'new')
-      uploadFileAWS(req.user._id,req.file.buffer,res,false);
+      uploadFileAWS(req.user._id,req.user.username,req.file.buffer,res,false);
     else if(req.params.action === 'edit')
-      uploadFileAWS(req.user._id,req.file.buffer,res,true);
+      uploadFileAWS(req.user._id,req.user.username,req.file.buffer,res,true);
     else {
       let deleteFile = async() => {
-        await GCS.file(req.user._id + '.zip').delete();
+        await GCS.file(req.user.username + '/submission.zip').delete();
         console.log(` deleted.`);
         updateDatabase(req.user._id, res, true);
       }
@@ -119,8 +140,8 @@ router.post('/submit/:action', Auth.authenticateAll, uploadFile.single('file'), 
     }
 });
 
-let uploadFileAWS = (userid, fileBuffer, res, editing) => {
-  const bs = GCS.file(userid + '.zip').createWriteStream({ resumable: false });
+let uploadFileAWS = (userid, username, fileBuffer, res, editing) => {
+  const bs = GCS.file(username + '/submission.zip').createWriteStream({ resumable: false });
   bs.on('finish', () => {
     console.log(`https://storage.googleapis.com/${GCS.name}`);
     if(editing)

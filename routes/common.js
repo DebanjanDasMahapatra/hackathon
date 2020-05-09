@@ -4,14 +4,14 @@ const uploadFile = multer({ storage: multer.memoryStorage() });
 const AWS = require('../helpers/aws');
 const GCS = require('../helpers/gcs');
 
-router.get('/download/:uid/:uname', (req, res) => {
-  const params = {
-    Bucket: process.env.AB,
-    Key: req.params.uid + '.zip'
-  }
+router.get('/download/:uname', (req, res) => {
   res.attachment(req.params.uname + '.zip');
-  // AWS.getObject(params)
-  GCS.file(req.params.uid + '.zip').createReadStream().pipe(res);
+  GCS.file(req.params.uname + '/submission.zip').createReadStream().pipe(res);
+});
+
+router.get('/view/:uname/:name', (req, res) => {
+  res.attachment(`${req.params.name}.jpg`);
+  GCS.file(req.params.uname + `/${req.params.name}.jpg`).createReadStream().pipe(res);
 });
 
 router.get('/getSettings', (req, res) => {
