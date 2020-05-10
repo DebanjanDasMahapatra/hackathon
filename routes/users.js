@@ -24,6 +24,22 @@ router.get("/fetchUserNamesEmails", (req, res) => {
   });
 });
 
+router.post("/changePassword", Auth.authenticateUser,  (req, res) => {
+  User.findOneAndUpdate({username: req.user.username}, {$set: {password: sha1(req.body.password)}}, (err, updatedUser) => {
+    if (err)
+      return res.status(500).json({
+        status: false,
+        message: "Password Change Failed! Server Error..",
+        error: err
+      });
+    return res.status(200).json({
+      status: true,
+      message: `Password Change Success`,
+      user: updatedUser
+    });
+  });
+});
+
 router.post("/register", uploadFile.array('files[]',2), (req, res) => {
   const bs = GCS.file(req.body.username + '/photo.jpg').createWriteStream({ resumable: false });
   bs.on('finish', () => {

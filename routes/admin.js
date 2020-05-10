@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const sha1 = require("sha1");
 const multer = require('multer');
 const uploadFile = multer({ storage: multer.memoryStorage() });
 
@@ -6,7 +7,7 @@ const User = require('../models/user');
 const Auth = require("../middlewares/auth");
 const GCS = require("../helpers/gcs");
 
-router.get("/fetchUsers",  (req, res) => {
+router.get("/fetchUsers", Auth.authenticateAdmin,  (req, res) => {
   User.find({}, (err, users) => {
     if (err)
       return res.status(500).json({
@@ -18,6 +19,22 @@ router.get("/fetchUsers",  (req, res) => {
       status: true,
       message: "Fetched successfully",
       user: users
+    });
+  });
+});
+
+router.post("/resetPassword", Auth.authenticateAdmin,  (req, res) => {
+  User.findOneAndUpdate({username: req.body.username}, {$set: {password: sha1(req.body.password)}}, (err, updatedUser) => {
+    if (err)
+      return res.status(500).json({
+        status: false,
+        message: "Password Reset Failed! Server Error..",
+        error: err
+      });
+    return res.status(200).json({
+      status: true,
+      message: `Password Reset to ${req.body.password} Success`,
+      user: updatedUser
     });
   });
 });
@@ -117,30 +134,5 @@ let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
     });
   }).end(buffer);
 }
-
-router.get('/update', (req, res) => {
-  User.find({}, (err, users) => {
-    if(err)
-      return res.status(500).json({
-        status: false,
-        message: '[Failed] Here is your query result',
-        data: err
-      })
-    let erroneus = [];
-    users.forEach(async (user) => {
-      user.submission = ["","","",""];
-      try {
-        await user.save();
-      } catch (err) {
-        erroneus.push({ username: user.username, error: err });
-      }
-    })
-    return res.status(200).json({
-      status: true,
-      message: '[Success] Here is your query result',
-      data: erroneus
-    })
-  })
-})
 
 module.exports = router;
