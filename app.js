@@ -10,7 +10,7 @@ require('dotenv').config();
 mongoose.connect(process.env.DBURL,{ useNewUrlParser: true, useUnifiedTopology: true, useFindAndModify: false, useCreateIndex: true }).then(data => {
   console.log("Connected to the DB");
 }).catch(err => {
-  console.log("Error connecting to the DB");
+  console.log("Error connecting to the DB",err);
 });
 mongoose.Promise = global.Promise;
 

@@ -8,6 +8,8 @@ const User = require("../models/user");
 const Auth = require("../middlewares/auth");
 const GCS = require('../helpers/gcs');
 
+const submitImageNames = ["processing1","processing2","paintingWithArtist","finalPainting"];
+
 router.get("/fetchUserNamesEmails", (req, res) => {
   User.find({}, {username: 1, email: 1}, (err, users) => {
     if (err)
@@ -130,69 +132,76 @@ router.post("/login", (req, res) => {
   });
 });
 
-router.post('/submit/:action', Auth.authenticateAll, uploadFile.single('file'), (req, res) => {
-  if(req.params.action != 'delete' && req.file.originalname.split(".")[1] !== 'zip')
-    return res.status(500).json({
-      status: false,
-      message: "Only .zip file is allowed for Submission"
-    });
-    if(req.params.action === 'new')
-      uploadFileAWS(req.user._id,req.user.username,req.file.buffer,res,false);
-    else if(req.params.action === 'edit')
-      uploadFileAWS(req.user._id,req.user.username,req.file.buffer,res,true);
-    else {
-      let deleteFile = async() => {
-        await GCS.file(req.user.username + '/submission.zip').delete();
-        console.log(` deleted.`);
-        updateDatabase(req.user._id, res, true);
-      }
-      deleteFile().catch(err => {
-        return res.status(500).json({
-          status: false,
-          message: 'Cannot Delete Submission',
-          error: err
-        });
-      });
+router.post('/submitnew/:seq/:action', Auth.authenticateAll, uploadFile.single('file'), (req, res) => {
+  if(req.params.action === 'new')
+    uploadFileGCSNew(req.user._id, req.user.username, req.params.seq, req.file.buffer, res, false);
+  else if(req.params.action === 'edit')
+    uploadFileGCSNew(req.user._id, req.user.username, req.params.seq, req.file.buffer, res, true);
+  else {
+    let deleteFile = async() => {
+      await GCS.file(req.user.username + `/${submitImageNames[req.params.seq-1]}.jpg`).delete();
+      console.log(` deleted.`);
+      updateDatabaseNew(req.user._id, req.params.seq, res, true);
     }
+    deleteFile().catch(err => {
+      return res.status(500).json({
+        status: false,
+        message: `Cannot Delete Image ${req.params.seq}`,
+        error: err
+      });
+    });
+  }
 });
 
-let uploadFileAWS = (userid, username, fileBuffer, res, editing) => {
-  const bs = GCS.file(username + '/submission.zip').createWriteStream({ resumable: false });
+let uploadFileGCSNew = (userid, username, ino, fileBuffer, res, editing) => {
+  const bs = GCS.file(username + `/${submitImageNames[ino-1]}.jpg`).createWriteStream({ resumable: false });
   bs.on('finish', () => {
     console.log(`https://storage.googleapis.com/${GCS.name}`);
     if(editing)
       return res.status(200).json({
         status: true,
-        message: 'Updated Submission Saved Successfully'
+        message: `Updated Image ${ino} Saved Successfully`
       });
     else
-      updateDatabase(userid, res, false);
+      updateDatabaseNew(userid, ino, res, false);
   }).on('error', (err) => {
     return res.status(500).json({
       status: false,
-      message: 'Submission Upload Error',
+      message: `Image ${ino} Upload Error`,
       error: err
     });
   }).end(fileBuffer);
 }
 
-let updateDatabase = (userid, res, deleting) => {
-  User.findOneAndUpdate({_id: userid}, {$set: {uploaded: !deleting}}, (err, updatedUser) => {
+let updateDatabaseNew = (userid, ino, res, deleting) => {
+  User.findById(userid, (err, currentUser) => {
     if(err)
       return res.status(500).json({
         status: false,
-        message: 'Submission Changing Error',
+        message: `Image ${ino} Changing Error`,
         error: err
       });
-    else if(updatedUser)
-    return res.status(200).json({
-      status: true,
-      message: `Submission ${deleting ? 'Deleted' : 'Saved'} Successfully`
-    });
+    else if(currentUser) {
+      currentUser.submissions[ino-1] = (deleting ? "" : `${submitImageNames[ino-1]}`);;
+      currentUser.markModified('submissions');
+      currentUser.save().then(modifiedUser => {
+        return res.status(200).json({
+          status: true,
+          message: `Image ${ino} ${deleting ? 'Deleted' : 'Saved'} Successfully`,
+          data: modifiedUser
+        });
+      }).catch(err2 => {
+        return res.status(500).json({
+          status: false,
+          message: `Image ${ino} Changing Error`,
+          error: err2
+        });
+      })
+    }
     else
       return res.status(500).json({
         status: false,
-        message: 'Submission Changing Error',
+        message: `Image ${ino} Changing Error: Cannot Find User`,
         error: 'Unknown'
       });
   });
