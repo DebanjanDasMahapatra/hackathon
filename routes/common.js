@@ -1,11 +1,5 @@
 const router = require("express").Router();
-const multer = require('multer');
 const GCS = require('../helpers/gcs');
-
-router.get('/download/:uname', (req, res) => {
-  res.attachment(req.params.uname + '.zip');
-  GCS.file(req.params.uname + '/submission.zip').createReadStream().pipe(res);
-});
 
 router.get('/view/:uname/:name', (req, res) => {
   res.attachment(`${req.params.name}.jpg`);

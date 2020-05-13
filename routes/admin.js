@@ -1,6 +1,10 @@
 const router = require('express').Router();
 const sha1 = require("sha1");
 const multer = require('multer');
+const fs = require('fs');
+const rimraf = require('rimraf');
+const archiver = require('archiver');
+const path = require('path');
 const uploadFile = multer({ storage: multer.memoryStorage() });
 
 const User = require('../models/user');
@@ -133,6 +137,112 @@ let updateBanner = (buffer, fileName, res, settingsData = undefined) => {
       error: err
     });
   }).end(buffer);
+}
+
+router.get('/preparedownload', Auth.authenticateAdmin, (req, res) => {
+  let baseDir = path.resolve(__dirname,'..','download');
+  let prepareDownload = async() => {
+    const [files] = await GCS.getFiles();
+    let error = [];
+    if(fs.existsSync(baseDir))
+      rimraf.sync(baseDir+'/');
+    fs.mkdirSync(baseDir);
+    files.forEach(async (file) => {
+      try {
+        error = [...error,file.name];
+        let d = file.name.split("/");
+        if(d[1].split(".").length > 1) {
+          try {
+            fs.mkdirSync(path.join(baseDir,d[0]));
+          } catch (err) {
+            error = [...error,err];
+          }
+          await file.download({destination: path.join(baseDir,d[0],d[1])});
+        }
+      } catch(err) {
+        error = [...error,err];
+      }
+    })
+    return res.status(200).json({
+      status: true,
+      message: "Download initiated successfully.. Come back after 3 hours and Start Zipping :)",
+      data: error
+    });
+  }
+  prepareDownload().catch(err => {
+    return res.status(500).json({
+      status: false,
+      message: 'Cannot initiate download',
+      error: err
+    });
+  });
+});
+
+router.get('/zipall', Auth.authenticateAdmin, (req, res) => {
+  const downloadKey = generate();
+  const files = fs.readdirSync(path.resolve(__dirname,'..'));
+  const returnV = files.find(file => {
+    return file.split(".")[1] == 'zip';
+  })
+  if(fs.existsSync(path.resolve(__dirname,'..',returnV)))
+    fs.unlinkSync(path.resolve(__dirname,'..',returnV));
+  var output = fs.createWriteStream(downloadKey+'.zip');
+  var archive = archiver('zip', {
+    zlib: { level: 9 }
+  });
+  output.on('close', () => {
+    console.log(archive.pointer() + ' total bytes, ready for downloading :)');
+    return res.status(200).json({
+      status: true,
+      message: 'Zipping Done.',
+      data: {
+        key: downloadKey,
+        size: Math.ceil(archive.pointer() / (1024*1024)),
+        apiRes: true
+      }
+    });
+  });
+  output.on('end', () => {
+    console.log('Data has been drained');
+    return res.status(500).json({
+      status: false,
+      message: 'Cannot Download',
+      error: 'err'
+    });
+  });
+  archive.on('warning', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Cannot Download',
+      error: err
+    });
+  });
+  archive.on('error', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Cannot Download',
+      error: err
+    });
+  });
+  archive.pipe(output);
+  archive.directory('download/', 'strokes');
+  archive.finalize();
+});
+
+router.get('/downloadall/:key', (req, res) => {
+  if(fs.existsSync(path.resolve(__dirname,'..',req.params.key+'.zip')))
+    res.sendFile(path.resolve(__dirname,'..',req.params.key+'.zip'));
+  else
+    res.sendFile(path.resolve(__dirname,'..','error.png'));
+});
+
+const generate = () => {
+  var result = '';
+  var characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  var charactersLength = characters.length;
+  for ( var i = 0; i < 15; i++ )
+     result += characters.charAt(Math.floor(Math.random() * charactersLength));
+  return result;
 }
 
 module.exports = router;
