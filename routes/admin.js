@@ -184,7 +184,7 @@ router.get('/zipall', Auth.authenticateAdmin, (req, res) => {
   const returnV = files.find(file => {
     return file.split(".")[1] == 'zip';
   })
-  if(fs.existsSync(path.resolve(__dirname,'..',returnV)))
+  if(returnV)
     fs.unlinkSync(path.resolve(__dirname,'..',returnV));
   var output = fs.createWriteStream(downloadKey+'.zip');
   var archive = archiver('zip', {
