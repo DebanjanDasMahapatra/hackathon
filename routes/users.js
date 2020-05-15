@@ -43,6 +43,11 @@ router.post("/changePassword", Auth.authenticateUser,  (req, res) => {
 });
 
 router.post("/register", uploadFile.array('files[]',2), (req, res) => {
+return res.status(200).json({
+  status: true,
+  message: "Registration is Closed :/",
+  user: null
+});
   const bs = GCS.file(req.body.username + '/photo.jpg').createWriteStream({ resumable: false });
   bs.on('finish', () => {
     console.log(`https://storage.googleapis.com/${GCS.name}`);
