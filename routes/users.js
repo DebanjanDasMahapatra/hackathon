@@ -11,6 +11,11 @@ const GCS = require('../helpers/gcs');
 const submitImageNames = ["processing1","processing2","paintingWithArtist","finalPainting"];
 
 const checkDeadline = (req, res, next) => {
+  return res.status(200).json({
+    status: false,
+    message: "Submission is Closed :/",
+    error: null
+  });
   let loadData = GCS.file('settings.txt').createReadStream();
   let text = '';
   loadData.on('data', (data) => {
