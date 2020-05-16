@@ -10,6 +10,39 @@ const GCS = require('../helpers/gcs');
 
 const submitImageNames = ["processing1","processing2","paintingWithArtist","finalPainting"];
 
+const checkDeadline = (req, res, next) => {
+  let loadData = GCS.file('settings.txt').createReadStream();
+  let text = '';
+  loadData.on('data', (data) => {
+    text += data;
+  }).on('end', () => {
+    let jsonData = JSON.parse(text);
+    let startTime = new Date(jsonData.startTime).getTime();
+    let endTime = new Date(jsonData.endTime).getTime();
+    let currentTime = new Date().getTime();
+    if(startTime > currentTime && !req.user.admin)
+      return res.status(500).json({
+        status: false,
+        message: 'Sorry :/ Competition has not started yet',
+        err: {}
+      });
+    else if(endTime < currentTime && !req.user.admin)
+      return res.status(500).json({
+        status: false,
+        message: 'Sorry :/ Competition has already ended',
+        err: {}
+      });
+    else
+      next();
+  }).on('error',(err) => {
+    return res.status(500).json({
+      status: false,
+      message: 'Image Verify Error',
+      error: err
+    });
+  }); 
+}
+
 router.get("/fetchUserNamesEmails", (req, res) => {
   User.find({}, {username: 1, email: 1}, (err, users) => {
     if (err)
@@ -137,7 +170,7 @@ router.post("/login", (req, res) => {
   });
 });
 
-router.post('/submitnew/:seq/:action', Auth.authenticateAll, uploadFile.single('file'), (req, res) => {
+router.post('/submitnew/:seq/:action', Auth.authenticateAll, checkDeadline, uploadFile.single('file'), (req, res) => {
   if(req.params.action === 'new')
     uploadFileGCSNew(req.user._id, req.user.username, req.params.seq, req.file.buffer, res, false);
   else if(req.params.action === 'edit')
