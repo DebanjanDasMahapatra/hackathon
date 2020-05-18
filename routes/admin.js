@@ -245,4 +245,79 @@ const generate = () => {
   return result;
 }
 
+router.post('/uploadcertificate/:action', Auth.authenticateAdmin, uploadFile.single('file'), (req, res) => {
+  if(req.params.action === 'new')
+    uploadFileGCSNew(req.body.username, req.file.buffer, res, false);
+  else if(req.params.action === 'edit')
+    uploadFileGCSNew(req.body.username, req.file.buffer, res, true);
+  else {
+    let deleteFile = async() => {
+      await GCS.file(req.body.username + '/certificate.pdf').delete();
+      console.log(` deleted.`);
+      updateDatabaseNew(req.body.username, res, true);
+    }
+    deleteFile().catch(err => {
+      return res.status(500).json({
+        status: false,
+        message: `Cannot Delete Certificate`,
+        error: err
+      });
+    });
+  }
+});
+
+let uploadFileGCSNew = (username, fileBuffer, res, editing) => {
+  const bs = GCS.file(username + '/certificate.pdf').createWriteStream({ resumable: false });
+  bs.on('finish', () => {
+    console.log(`https://storage.googleapis.com/${GCS.name}/${username}`);
+    if(editing)
+      return res.status(200).json({
+        status: true,
+        message: `Updated Certificate Saved Successfully`
+      });
+    else
+      updateDatabaseNew(username, res, false);
+  }).on('error', (err) => {
+    return res.status(500).json({
+      status: false,
+      message: `Certificate Upload Error`,
+      error: err
+    });
+  }).end(fileBuffer);
+}
+
+let updateDatabaseNew = (username, res, deleting) => {
+  User.findOne({username}, (err, currentUser) => {
+    if(err)
+      return res.status(500).json({
+        status: false,
+        message: `Certificate Changing Error`,
+        error: err
+      });
+    else if(currentUser) {
+      currentUser.uploaded = !deleting;
+      currentUser.markModified('uploaded');
+      currentUser.save().then(modifiedUser => {
+        return res.status(200).json({
+          status: true,
+          message: `Certificate ${deleting ? 'Deleted' : 'Saved'} Successfully`,
+          data: modifiedUser
+        });
+      }).catch(err2 => {
+        return res.status(500).json({
+          status: false,
+          message: `Certificate Changing Error`,
+          error: err2
+        });
+      })
+    }
+    else
+      return res.status(500).json({
+        status: false,
+        message: `Certificate Changing Error: Cannot Find User`,
+        error: 'Unknown'
+      });
+  });
+}
+
 module.exports = router;

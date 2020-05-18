@@ -6,6 +6,11 @@ router.get('/view/:uname/:name', (req, res) => {
   GCS.file(req.params.uname + `/${req.params.name}.jpg`).createReadStream().pipe(res);
 });
 
+router.get('/certs/:uname/:name', (req, res) => {
+  res.attachment(`${req.params.name}.pdf`);
+  GCS.file(req.params.uname + '/certificate.pdf').createReadStream().pipe(res);
+});
+
 router.get('/getSettings', (req, res) => {
   let loadData = GCS.file('settings.txt').createReadStream();
   let text = '';
